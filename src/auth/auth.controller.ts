@@ -1,6 +1,6 @@
 import { Inject, Controller, Post, Body } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { lastValueFrom } from 'rxjs';
 import { AUTH_SERVICE } from 'src/config';
 import { RegisterDto, LoginDto } from './dto';
@@ -17,7 +17,7 @@ export class AuthController {
       const res = await lastValueFrom(this.clientAuthService.send({cmd: 'register'}, registerDto));
       return res;
     } catch (error) {
-      return error;
+      throw error;
     }
   }
 
@@ -28,14 +28,20 @@ export class AuthController {
       const res = await lastValueFrom(this.clientAuthService.send({cmd: 'login'}, loginDto));
       return res;
     } catch (error) {
-      return error
+      throw error
     }
   }
 
   @ApiOperation({ summary: 'Refresh a token' })
+  @ApiBody({ schema: { example: { refresh_token: '...' } } })
   @Post('refresh')
-  refresh(){
-    return 'estoy en refresh';
+  async refresh(@Body() refreshDto: { refresh_token: string }){
+    try {
+      return await lastValueFrom(this.clientAuthService.send({cmd: 'refresh'}, refreshDto));
+    } catch (error) {
+      console.log('[Refresh Error]', error);
+      throw error;
+    }
   }
 
   @ApiOperation({ summary: 'Logout a user' })
