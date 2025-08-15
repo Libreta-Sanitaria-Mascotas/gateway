@@ -1,9 +1,10 @@
-import { Inject, Controller, Post, Body } from '@nestjs/common';
+import { Inject, Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { lastValueFrom } from 'rxjs';
 import { AUTH_SERVICE } from 'src/config';
 import { RegisterDto, LoginDto } from './dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -44,9 +45,17 @@ export class AuthController {
     }
   }
 
+
   @ApiOperation({ summary: 'Logout a user' })
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout(){
-    return 'estoy en logout';
+  async logout(@Req() req){
+    try {
+      const userId = req.user?.userId;
+      return await lastValueFrom(this.clientAuthService.send({cmd: 'logout'}, { userId }));
+    } catch (error) {
+      console.log('[Logout Error]', error);
+      throw error;
+    }
   }
 }

@@ -12,6 +12,8 @@ interface EnvVars {
   HEALTH_SERVICE_PORT: number;
   PET_SERVICE: string;
   PET_SERVICE_PORT: number;
+  JWT_SECRET: string;
+  JWT_EXPIRES_IN: string;
 }
 
 const {error, value } = envValidationSchema.validate(process.env);
@@ -33,4 +35,8 @@ export const envs = {
   userServicePort: envVars.USER_SERVICE_PORT,
   authService: envVars.AUTH_SERVICE,
   authServicePort: envVars.AUTH_SERVICE_PORT,
+  jwt: {
+    secret: envVars.JWT_SECRET,
+    expiresIn: envVars.JWT_EXPIRES_IN,
+  },
 };

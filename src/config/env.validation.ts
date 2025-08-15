@@ -11,4 +11,6 @@ export const envValidationSchema = Joi.object({
   HEALTH_SERVICE_PORT: Joi.number().required(),
   PET_SERVICE: Joi.string().required(),
   PET_SERVICE_PORT: Joi.number().required(),
+  JWT_SECRET: Joi.string().required(),
+  JWT_EXPIRES_IN: Joi.string().required(),
 }).unknown(true);
