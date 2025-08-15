@@ -8,12 +8,10 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { USER_SERVICE } from '../config';
-import { PaginationDto } from '../common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import {
   ApiBody,
   ApiOperation,
@@ -21,6 +19,11 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { USER_SERVICE } from '../config';
+import { PaginationDto } from '../common';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
 @Controller('users')
@@ -31,10 +34,11 @@ export class UsersController {
 
   @ApiOperation({ summary: 'Create a new user' })
   @ApiBody({ type: CreateUserDto })
+  @UseGuards(JwtAuthGuard)
   @Post()
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.clientUserService.send({ cmd: 'create_user' }, createUserDto);
+  create(@Body() createUserDto: CreateUserDto, @Req() req) {
+    const credentialId = req.user?.userId;
+    return this.clientUserService.send({ cmd: 'create_user' }, {...createUserDto, credentialId});
   }
 
   @ApiOperation({ summary: 'Get all users' })
