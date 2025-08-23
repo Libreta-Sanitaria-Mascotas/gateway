@@ -18,6 +18,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiTags,
+  ApiBearerAuth
 } from '@nestjs/swagger';
 import { USER_SERVICE } from '../config';
 import { PaginationDto } from '../common';
@@ -30,15 +31,16 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 export class UsersController {
   constructor(
     @Inject(USER_SERVICE) private readonly clientUserService: ClientProxy,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Create a new user' })
+  @ApiBearerAuth()
   @ApiBody({ type: CreateUserDto })
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() createUserDto: CreateUserDto, @Req() req) {
     const credentialId = req.user?.userId;
-    return this.clientUserService.send({ cmd: 'create_user' }, {...createUserDto, credentialId});
+    return this.clientUserService.send({ cmd: 'create_user' }, { ...createUserDto, credentialId });
   }
 
   @ApiOperation({ summary: 'Get all users' })
@@ -56,7 +58,6 @@ export class UsersController {
   })
   @Get()
   findAll(@Query() paginationDto: PaginationDto) {
-    console.log('Pagination en Gateway ', paginationDto);
     return this.clientUserService.send({ cmd: 'find_all' }, paginationDto);
   }
 
