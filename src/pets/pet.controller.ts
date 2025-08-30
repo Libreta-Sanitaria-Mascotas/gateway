@@ -25,7 +25,7 @@ export class PetController {
   constructor(
     @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy,
     @Inject(USER_SERVICE) private readonly clientUserService: ClientProxy,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Register my pet' })
   @ApiBody({ type: CreatePetDto })
@@ -73,7 +73,6 @@ export class PetController {
           statusCode: 404,
           message: 'Usuario no encontrado',
         });
-      console.log('USER', user);  
       const pets = await lastValueFrom(
         this.clientPetService
           .send({ cmd: 'find_all_pets_by_owner_id' }, { ownerId: user.id })
