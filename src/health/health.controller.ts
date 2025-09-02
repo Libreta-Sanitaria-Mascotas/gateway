@@ -1,15 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Inject } from '@nestjs/common';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
+import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
+import { lastValueFrom } from 'rxjs';
 
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(
-    //private readonly clientHealthService: ClientProxy
+    @Inject(HEALTH_SERVICE) private readonly clientHealthService: ClientProxy,
+    @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy
   ) { }
 
   @Post()
@@ -17,9 +20,21 @@ export class HealthController {
     return `health record ${JSON.stringify(createHealthRecordDto)}`;
   }
 
-  @Get()
-  findAll() {
-    return `all health records`;
+  @ApiOperation({ summary: 'Get all health records by pet id' })
+  @Get(':petId')
+  async findAll(@Param('petId') petId: string) {
+    try {
+      const pet = await lastValueFrom(this.clientPetService.send({ cmd: 'find_pet' }, petId));
+      if (!pet) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'Pet not found',
+        });
+      }
+      return await lastValueFrom(this.clientHealthService.send({ cmd: 'find_all_health_records_by_pet_id' }, { petId }));
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   @Get(':id')

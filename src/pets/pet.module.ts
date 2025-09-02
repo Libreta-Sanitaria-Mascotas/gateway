@@ -18,5 +18,6 @@ import { UsersModule } from 'src/users/users.module';
   ]), UsersModule],
   controllers: [PetController],
   providers: [],
+  exports: [ClientsModule],
 })
 export class PetModule { }
