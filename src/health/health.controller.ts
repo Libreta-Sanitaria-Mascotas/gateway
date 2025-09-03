@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Inject } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
-import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
+import { HEALTH_SERVICE, PET_SERVICE, USER_SERVICE } from 'src/config';
 import { lastValueFrom } from 'rxjs';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 
 @ApiTags('Health')
@@ -12,12 +13,38 @@ import { lastValueFrom } from 'rxjs';
 export class HealthController {
   constructor(
     @Inject(HEALTH_SERVICE) private readonly clientHealthService: ClientProxy,
-    @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy
+    @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy,
+    @Inject(USER_SERVICE) private readonly clientUserService: ClientProxy
   ) { }
 
+  @ApiOperation({ summary: 'Create a new health record' })
+  @ApiBody({ type: CreateHealthRecordDto })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() createHealthRecordDto: CreateHealthRecordDto) {
-    return `health record ${JSON.stringify(createHealthRecordDto)}`;
+  async create(@Body() createHealthRecordDto: CreateHealthRecordDto, @Req() req) {
+    try {
+      const credentialId = req.user?.userId;
+      const pet = await lastValueFrom(this.clientPetService.send({ cmd: 'find_pet' }, createHealthRecordDto.petId));
+      if (!pet) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'Pet not found',
+        });
+      }
+      if (pet.ownerId !== credentialId) {
+        throw new RpcException({
+          statusCode: 403,
+          message: 'Not authorized',
+        });
+      }
+      const healthRecord = await lastValueFrom(this.clientHealthService.send({ cmd: 'create_health_record' }, { ...createHealthRecordDto, petId: pet.id }));
+      return healthRecord;
+    } catch (error) {
+      throw error instanceof RpcException
+        ? error
+        : new RpcException({ statusCode: error.getStatus(), message: error.message });
+    }
   }
 
   @ApiOperation({ summary: 'Get all health records by pet id' })

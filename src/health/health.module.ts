@@ -4,6 +4,7 @@ import { HealthController } from './health.controller';
 import { HEALTH_SERVICE } from 'src/config';
 import { envs } from 'src/config/envs';
 import { PetModule } from 'src/pets/pet.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PetModule } from 'src/pets/pet.module';
       },
     }]),
     PetModule,
+    UsersModule,
   ],
   controllers: [HealthController],
   providers: [],
