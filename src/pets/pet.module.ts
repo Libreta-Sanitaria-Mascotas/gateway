@@ -1,26 +1,42 @@
 import { Module } from '@nestjs/common';
 import { PetController } from './pet.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { PET_SERVICE } from 'src/config';
-import { envs } from 'src/config/envs';
+import { PET_SERVICE, MEDIA_SERVICE, getRabbitmqUrl } from 'src/config';
 import { UsersModule } from 'src/users/users.module';
+import { CustomCacheModule } from 'src/cache/cache.module';
+import { CreatePetWithPhotoSaga } from 'src/sagas/create-pet-with-photo.saga';
 
 @Module({
-  imports: [ClientsModule.register([
-    {
-      name: PET_SERVICE,
-      transport: Transport.RMQ,
-      options: {
-        urls: ['amqp://admin:admin123@rabbitmq:5672'],
-        queue: 'pet_queue',
-        queueOptions: {
-          durable: true,
+  imports: [
+    ClientsModule.register([
+      {
+        name: PET_SERVICE,
+        transport: Transport.RMQ,
+        options: {
+          urls: [getRabbitmqUrl()],
+          queue: 'pet_queue',
+          queueOptions: {
+            durable: true,
+          },
         },
       },
-    }
-  ]), UsersModule],
+      {
+        name: MEDIA_SERVICE,
+        transport: Transport.RMQ,
+        options: {
+          urls: [getRabbitmqUrl()],
+          queue: 'media_queue',
+          queueOptions: {
+            durable: true,
+          },
+        },
+      },
+    ]),
+    UsersModule,
+    CustomCacheModule,
+  ],
   controllers: [PetController],
-  providers: [],
+  providers: [CreatePetWithPhotoSaga],
   exports: [ClientsModule],
 })
-export class PetModule { }
+export class PetModule {}

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { USER_SERVICE } from '../config/services';
+import { USER_SERVICE, getRabbitmqUrl } from '../config';
 import { UsersController } from './users.controller';
 
 @Module({
@@ -9,7 +9,8 @@ import { UsersController } from './users.controller';
       {
         name: USER_SERVICE,
         transport: Transport.RMQ,
-        options: {  urls: ['amqp://admin:admin123@rabbitmq:5672'],
+        options: {
+          urls: [getRabbitmqUrl()],
           queue: 'user_queue',
           queueOptions: {
             durable: true,

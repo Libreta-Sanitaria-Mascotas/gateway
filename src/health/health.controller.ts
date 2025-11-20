@@ -1,11 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req, UseGuards } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { ApiBody, ApiOperation, ApiParam, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
-import { HEALTH_SERVICE, PET_SERVICE, USER_SERVICE } from 'src/config';
+import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
 import { lastValueFrom } from 'rxjs';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { UserCacheService } from 'src/cache/user-cache.service';
 
 
 @ApiTags('Health')
@@ -14,7 +15,7 @@ export class HealthController {
   constructor(
     @Inject(HEALTH_SERVICE) private readonly clientHealthService: ClientProxy,
     @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy,
-    @Inject(USER_SERVICE) private readonly clientUserService: ClientProxy
+    private readonly userCacheService: UserCacheService,
   ) { }
 
   @ApiOperation({ summary: 'Create a new health record' })
@@ -25,12 +26,8 @@ export class HealthController {
   async create(@Body() createHealthRecordDto: CreateHealthRecordDto, @Req() req) {
     try {
       const credentialId = req.user?.userId;
-      
-      // First, get the user by credentialId
-      const user = await lastValueFrom(
-        this.clientUserService
-          .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
-      );
+
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
       if (!user) {
         throw new RpcException({
           statusCode: 404,
@@ -38,8 +35,10 @@ export class HealthController {
         });
       }
 
-      // Then, get the pet and validate ownership
-      const pet = await lastValueFrom(this.clientPetService.send({ cmd: 'find_pet' }, createHealthRecordDto.petId));
+      const pet = await this.userCacheService.getPetById(
+        createHealthRecordDto.petId,
+        this.clientPetService,
+      );
       if (!pet) {
         throw new RpcException({
           statusCode: 404,
@@ -65,10 +64,13 @@ export class HealthController {
   }
 
   @ApiOperation({ summary: 'Get all health records by pet id' })
-  @Get(':petId')
+  @Get('pet/:petId')
   async findAll(@Param('petId') petId: string) {
     try {
-      const pet = await lastValueFrom(this.clientPetService.send({ cmd: 'find_pet' }, petId));
+      const pet = await this.userCacheService.getPetById(
+        petId,
+        this.clientPetService,
+      );
       if (!pet) {
         throw new RpcException({
           statusCode: 404,
@@ -82,17 +84,33 @@ export class HealthController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return `health record id ${id}`;
+  async findOne(@Param('id') id: string) {
+    return await lastValueFrom(
+      this.clientHealthService.send({ cmd: 'find_health_record_by_id' }, { id }),
+    );
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateHealthRecordDto: UpdateHealthRecordDto) {
-    return `update health record ${id}, data ${JSON.stringify(updateHealthRecordDto)}`;
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async update(
+    @Param('id') id: string,
+    @Body() updateHealthRecordDto: UpdateHealthRecordDto,
+  ) {
+    return await lastValueFrom(
+      this.clientHealthService.send(
+        { cmd: 'update_health_record_by_id' },
+        { ...updateHealthRecordDto, id },
+      ),
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return `delete health register ${id}`;
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async remove(@Param('id') id: string) {
+    return await lastValueFrom(
+      this.clientHealthService.send({ cmd: 'delete_health_record_by_id' }, { id }),
+    );
   }
 }

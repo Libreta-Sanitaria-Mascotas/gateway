@@ -4,16 +4,30 @@ import { AuthModule } from './auth/auth.module';
 import { PetModule } from './pets/pet.module';
 import { HealthModule } from './health/health.module';
 import { MediaModule } from './media/media.module';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
-    AuthModule, 
-    UsersModule, 
-    PetModule, 
+    ThrottlerModule.forRoot([
+      {
+        name: 'global',
+        ttl: 60,
+        limit: 100,
+      },
+    ]),
+    AuthModule,
+    UsersModule,
+    PetModule,
     HealthModule,
     MediaModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
