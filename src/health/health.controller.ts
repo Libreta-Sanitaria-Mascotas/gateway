@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req, UseGuards } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
 import { HEALTH_SERVICE, PET_SERVICE, USER_SERVICE } from 'src/config';
@@ -25,6 +25,20 @@ export class HealthController {
   async create(@Body() createHealthRecordDto: CreateHealthRecordDto, @Req() req) {
     try {
       const credentialId = req.user?.userId;
+      
+      // First, get the user by credentialId
+      const user = await lastValueFrom(
+        this.clientUserService
+          .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
+      );
+      if (!user) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'User not found',
+        });
+      }
+
+      // Then, get the pet and validate ownership
       const pet = await lastValueFrom(this.clientPetService.send({ cmd: 'find_pet' }, createHealthRecordDto.petId));
       if (!pet) {
         throw new RpcException({
@@ -32,12 +46,15 @@ export class HealthController {
           message: 'Pet not found',
         });
       }
-      if (pet.ownerId !== credentialId) {
+      
+      // Compare pet.ownerId with user.id (not credentialId)
+      if (pet.ownerId !== user.id) {
         throw new RpcException({
           statusCode: 403,
           message: 'Not authorized',
         });
       }
+      
       const healthRecord = await lastValueFrom(this.clientHealthService.send({ cmd: 'create_health_record' }, { ...createHealthRecordDto, petId: pet.id }));
       return healthRecord;
     } catch (error) {

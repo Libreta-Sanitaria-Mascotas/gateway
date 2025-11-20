@@ -9,10 +9,13 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
     ClientsModule.register([
       {
         name: AUTH_SERVICE,
-        transport: Transport.TCP,
+        transport: Transport.RMQ,
         options: {
-          host: envs.authService,
-          port: envs.authServicePort,
+          urls: ['amqp://admin:admin123@rabbitmq:5672'],
+          queue: 'auth_queue',
+          queueOptions: {
+            durable: true,
+          },
         },
       },
     ])

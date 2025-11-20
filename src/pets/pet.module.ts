@@ -9,10 +9,13 @@ import { UsersModule } from 'src/users/users.module';
   imports: [ClientsModule.register([
     {
       name: PET_SERVICE,
-      transport: Transport.TCP,
+      transport: Transport.RMQ,
       options: {
-        host: envs.petService,
-        port: envs.petServicePort,
+        urls: ['amqp://admin:admin123@rabbitmq:5672'],
+        queue: 'pet_queue',
+        queueOptions: {
+          durable: true,
+        },
       },
     }
   ]), UsersModule],

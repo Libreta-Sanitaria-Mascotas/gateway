@@ -10,10 +10,13 @@ import { UsersModule } from 'src/users/users.module';
   imports: [
     ClientsModule.register([{
       name: HEALTH_SERVICE,
-      transport: Transport.TCP,
+      transport: Transport.RMQ,
       options: {
-        host: envs.healthService,
-        port: envs.healthServicePort,
+        urls: ['amqp://admin:admin123@rabbitmq:5672'],
+        queue: 'health_queue',
+        queueOptions: {
+          durable: true,
+        },
       },
     }]),
     PetModule,

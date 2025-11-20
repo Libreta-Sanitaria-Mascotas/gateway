@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { USER_SERVICE, envs } from '../config';
+import { USER_SERVICE } from '../config/services';
 import { UsersController } from './users.controller';
 
 @Module({
@@ -8,10 +8,12 @@ import { UsersController } from './users.controller';
     ClientsModule.register([
       {
         name: USER_SERVICE,
-        transport: Transport.TCP,
-        options: {
-          host: envs.userService,
-          port: envs.userServicePort,
+        transport: Transport.RMQ,
+        options: {  urls: ['amqp://admin:admin123@rabbitmq:5672'],
+          queue: 'user_queue',
+          queueOptions: {
+            durable: true,
+          },
         },
       },
     ]),
