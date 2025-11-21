@@ -8,6 +8,13 @@ async function bootstrap() {
   const { port, nodeEnv } = envs;
   const logger = new Logger('Gateway');
   const app = await NestFactory.create(AppModule);
+  
+  // Enable CORS for web frontend
+  app.enableCors({
+    origin: true, // Allow all origins in development
+    credentials: true,
+  });
+  
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
