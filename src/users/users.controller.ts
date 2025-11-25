@@ -7,7 +7,6 @@ import {
   Patch,
   Param,
   Delete,
-  Query,
   UseGuards,
   Req,
   UploadedFile,
@@ -20,17 +19,16 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiTags,
   ApiBearerAuth,
   ApiConsumes,
 } from '@nestjs/swagger';
 import { USER_SERVICE, MEDIA_SERVICE } from '../config';
-import { lastValueFrom } from 'rxjs';
-import { PaginationDto } from '../common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { lastValueFrom, timeout } from 'rxjs';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { UserCacheService } from '../cache/user-cache.service';
+import { MediaHttpService } from 'src/media/media-http.service';
 
 @ApiTags('Users')
 @Controller('users')
@@ -38,6 +36,8 @@ export class UsersController {
   constructor(
     @Inject(USER_SERVICE) private readonly clientUserService: ClientProxy,
     @Inject(MEDIA_SERVICE) private readonly mediaClient: ClientProxy,
+    private readonly userCacheService: UserCacheService,
+    private readonly mediaHttpService: MediaHttpService,
   ) { }
 
   @ApiOperation({ summary: 'Get current authenticated user profile' })
@@ -46,7 +46,9 @@ export class UsersController {
   @Get('me')
   getMe(@Req() req) {
     const credentialId = req.user?.userId;
-    return this.clientUserService.send({ cmd: 'find_user_by_credential_id' }, { credentialId });
+    return this.clientUserService
+      .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
+      .pipe(timeout(3000));
   }
 
   @ApiOperation({ summary: 'Upload avatar for current user' })
@@ -72,33 +74,23 @@ export class UsersController {
     
     // Get user data
     const user = await lastValueFrom(
-      this.clientUserService.send({ cmd: 'find_user_by_credential_id' }, { credentialId }),
+      this.clientUserService
+        .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
+        .pipe(timeout(3000)),
     );
 
-    // Upload to media service
-    const payload = {
-      file: {
-        data: file.buffer.toString('base64'),
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-      },
-      entityType: 'user' as const,
-      entityId: user.id,
-    };
+    // Upload to media service (HTTP, evita base64 por Rabbit)
+    const media = await this.mediaHttpService.uploadFile(file, 'user', user.id);
 
-    const media = await lastValueFrom(
-      this.mediaClient.send({ cmd: 'upload_file' }, payload),
-    );
-
-    // Update user with avatar URL
-    const avatarUrl = `/api/media/${media.id}`;
+    // Update user with avatar URL - use direct media service path
+    // Frontend will access via http://localhost:3005/api/media/{id}
+    const avatarUrl = `http://localhost:3005/api/media/${media.id}`;
     await lastValueFrom(
-      this.clientUserService.send(
-        { cmd: 'update_user' },
-        { id: user.id, avatarUrl },
-      ),
+      this.clientUserService
+        .send({ cmd: 'update_user' }, { id: user.id, avatarUrl })
+        .pipe(timeout(3000)),
     );
+    await this.userCacheService.invalidateUser(credentialId);
 
     return { ...user, avatarUrl };
   }
@@ -112,7 +104,9 @@ export class UsersController {
     
     // Get user data
     const user = await lastValueFrom(
-      this.clientUserService.send({ cmd: 'find_user_by_credential_id' }, { credentialId }),
+      this.clientUserService
+        .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
+        .pipe(timeout(3000)),
     );
 
     if (user.avatarUrl) {
@@ -121,71 +115,36 @@ export class UsersController {
       
       // Delete from media service
       await lastValueFrom(
-        this.mediaClient.send({ cmd: 'delete_file' }, { id: mediaId }),
+        this.mediaClient.send({ cmd: 'delete_file' }, { id: mediaId }).pipe(timeout(3000)),
       );
 
       // Update user to remove avatar URL
       await lastValueFrom(
-        this.clientUserService.send(
-          { cmd: 'update_user' },
-          { id: user.id, avatarUrl: null },
-        ),
+        this.clientUserService
+          .send({ cmd: 'update_user' }, { id: user.id, avatarUrl: null })
+          .pipe(timeout(3000)),
       );
     }
+    await this.userCacheService.invalidateUser(credentialId);
 
     return { message: 'Avatar eliminado exitosamente' };
-  }
-
-  @ApiOperation({ summary: 'Create a new user' })
-  @ApiBearerAuth()
-  @ApiBody({ type: CreateUserDto })
-  @UseGuards(JwtAuthGuard)
-  @Post()
-  create(@Body() createUserDto: CreateUserDto, @Req() req) {
-    const credentialId = req.user?.userId;
-    return this.clientUserService.send({ cmd: 'create_user' }, { ...createUserDto, credentialId });
-  }
-
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Number of items per page',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number for pagination',
-  })
-  @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.clientUserService.send({ cmd: 'find_all' }, paginationDto);
-  }
-
-  @ApiOperation({ summary: 'Get a user by ID' })
-  @ApiParam({ name: 'id', type: 'string' })
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.clientUserService.send({ cmd: 'find_user' }, id);
   }
 
   @ApiOperation({ summary: 'Update a user by ID' })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiBody({ type: UpdateUserDto })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.clientUserService.send(
-      { cmd: 'update_user' },
-      { ...updateUserDto, id },
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const res = await lastValueFrom(
+      this.clientUserService
+        .send({ cmd: 'update_user' }, { ...updateUserDto, id })
+        .pipe(timeout(3000)),
     );
-  }
-
-  @ApiOperation({ summary: 'Delete a user by ID' })
-  @ApiParam({ name: 'id', type: 'string' })
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.clientUserService.send({ cmd: 'remove_user' }, id);
+    if (updateUserDto?.credentialId) {
+      await this.userCacheService.invalidateUser(updateUserDto.credentialId);
+    }
+    return res;
   }
 }

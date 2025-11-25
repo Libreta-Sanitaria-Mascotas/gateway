@@ -3,9 +3,9 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { PetModule } from './pets/pet.module';
 import { HealthModule } from './health/health.module';
-import { MediaModule } from './media/media.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [

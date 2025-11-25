@@ -4,7 +4,7 @@ import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
 import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, timeout } from 'rxjs';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UserCacheService } from 'src/cache/user-cache.service';
 
@@ -54,7 +54,11 @@ export class HealthController {
         });
       }
       
-      const healthRecord = await lastValueFrom(this.clientHealthService.send({ cmd: 'create_health_record' }, { ...createHealthRecordDto, petId: pet.id }));
+      const healthRecord = await lastValueFrom(
+        this.clientHealthService
+          .send({ cmd: 'create_health_record' }, { ...createHealthRecordDto, petId: pet.id })
+          .pipe(timeout(3000)),
+      );
       return healthRecord;
     } catch (error) {
       throw error instanceof RpcException
@@ -77,7 +81,11 @@ export class HealthController {
           message: 'Pet not found',
         });
       }
-      return await lastValueFrom(this.clientHealthService.send({ cmd: 'find_all_health_records_by_pet_id' }, { petId }));
+      return await lastValueFrom(
+        this.clientHealthService
+          .send({ cmd: 'find_all_health_records_by_pet_id' }, { petId })
+          .pipe(timeout(3000)),
+      );
     } catch (error) {
       throw new RpcException(error);
     }
@@ -86,7 +94,9 @@ export class HealthController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return await lastValueFrom(
-      this.clientHealthService.send({ cmd: 'find_health_record_by_id' }, { id }),
+      this.clientHealthService
+        .send({ cmd: 'find_health_record_by_id' }, { id })
+        .pipe(timeout(3000)),
     );
   }
 
@@ -101,7 +111,7 @@ export class HealthController {
       this.clientHealthService.send(
         { cmd: 'update_health_record_by_id' },
         { ...updateHealthRecordDto, id },
-      ),
+      ).pipe(timeout(3000)),
     );
   }
 
@@ -110,7 +120,9 @@ export class HealthController {
   @UseGuards(JwtAuthGuard)
   async remove(@Param('id') id: string) {
     return await lastValueFrom(
-      this.clientHealthService.send({ cmd: 'delete_health_record_by_id' }, { id }),
+      this.clientHealthService
+        .send({ cmd: 'delete_health_record_by_id' }, { id })
+        .pipe(timeout(3000)),
     );
   }
 }

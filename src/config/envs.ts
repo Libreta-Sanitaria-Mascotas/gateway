@@ -12,6 +12,7 @@ interface EnvVars {
   HEALTH_SERVICE_PORT: number;
   PET_SERVICE: string;
   PET_SERVICE_PORT: number;
+  MEDIA_SERVICE_URL: string;
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
 }
@@ -35,6 +36,7 @@ export const envs = {
   userServicePort: envVars.USER_SERVICE_PORT,
   authService: envVars.AUTH_SERVICE,
   authServicePort: envVars.AUTH_SERVICE_PORT,
+  mediaServiceUrl: envVars.MEDIA_SERVICE_URL,
   jwt: {
     secret: envVars.JWT_SECRET,
     expiresIn: envVars.JWT_EXPIRES_IN,

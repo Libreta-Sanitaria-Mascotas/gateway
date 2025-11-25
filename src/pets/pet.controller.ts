@@ -61,7 +61,12 @@ export class PetController {
       );
       return pet;
     } catch (error) {
-      console.log('error', error);
+      throw error instanceof RpcException
+        ? error
+        : new RpcException({
+            statusCode: error?.status ?? 500,
+            message: error?.message ?? 'No se pudo crear la mascota',
+          });
     }
   }
 
@@ -154,6 +159,7 @@ export class PetController {
           .send({ cmd: 'update_pet' }, { ...updatePetDto, id })
           .pipe(timeout(3000)),
       );
+      await this.userCacheService.invalidatePet(id);
       return pet;
     } catch (error) {
       throw new RpcException(error);
@@ -171,6 +177,7 @@ export class PetController {
           .send({ cmd: 'delete_pet' }, id)
           .pipe(timeout(3000)),
       );
+      await this.userCacheService.invalidatePet(id);
       return { message: 'Mascota eliminada correctamente' };
     } catch (error) {
       throw new RpcException(error);

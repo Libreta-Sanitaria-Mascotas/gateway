@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, retry, timeout, timer } from 'rxjs';
 import { HEALTH_SERVICE, MEDIA_SERVICE } from 'src/config';
+import { MediaHttpService } from 'src/media/media-http.service';
 import { ISaga, SagaStep } from './saga.interface';
 type UploadedFilePayload = {
   buffer: Buffer;
@@ -24,7 +25,17 @@ export class CreateHealthWithCertificateSaga
   constructor(
     @Inject(HEALTH_SERVICE) private readonly healthService: ClientProxy,
     @Inject(MEDIA_SERVICE) private readonly mediaService: ClientProxy,
+    private readonly mediaHttpService: MediaHttpService,
   ) {}
+
+  private async sendWithResilience<T>(observable$: any) {
+    return lastValueFrom(
+      observable$.pipe(
+        timeout(3000),
+        retry({ count: 2, delay: (_err, retryCount) => timer((retryCount + 1) * 300) }),
+      ),
+    );
+  }
 
   async execute(data: CreateHealthWithCertificateData) {
     let healthRecord: any = null;
@@ -34,7 +45,7 @@ export class CreateHealthWithCertificateSaga
       const createHealthStep: SagaStep = {
         name: 'create_health_record',
         execute: async () => {
-          healthRecord = await lastValueFrom(
+          healthRecord = await this.sendWithResilience(
             this.healthService.send({ cmd: 'create_health_record' }, data.healthData),
           );
           return healthRecord;
@@ -56,23 +67,15 @@ export class CreateHealthWithCertificateSaga
 
       if (data.certificate) {
         const certificateFile = data.certificate;
-        const uploadCertificateStep: SagaStep = {
-          name: 'upload_certificate',
-          execute: async () => {
-            const payload = {
-              file: {
-                data: certificateFile.buffer.toString('base64'),
-                originalname: certificateFile.originalname,
-                mimetype: certificateFile.mimetype,
-                size: certificateFile.size,
-              },
-              entityType: 'health',
-              entityId: healthRecord.id,
-            };
-            certificate = await lastValueFrom(
-              this.mediaService.send({ cmd: 'upload_file' }, payload),
+          const uploadCertificateStep: SagaStep = {
+            name: 'upload_certificate',
+            execute: async () => {
+            certificate = await this.mediaHttpService.uploadFile(
+              certificateFile,
+              'health',
+              healthRecord.id,
             );
-            await lastValueFrom(
+            await this.sendWithResilience(
               this.healthService.send(
                 { cmd: 'link_media' },
                 { healthRecordId: healthRecord.id, mediaId: certificate.id },

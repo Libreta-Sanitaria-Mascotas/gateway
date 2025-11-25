@@ -60,4 +60,13 @@ export class CreatePetDto {
   @IsUUID()
   @IsOptional()
   ownerId?: string;
+
+  @ApiProperty({
+    description: 'Media ID asociado a la foto de la mascota',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  mediaId?: string;
 }

@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, retry, timeout, timer } from 'rxjs';
 import { ISaga, SagaStep } from './saga.interface';
 import { MEDIA_SERVICE, PET_SERVICE } from 'src/config';
+import { MediaHttpService } from 'src/media/media-http.service';
 type UploadedPhoto = {
   buffer: Buffer;
   originalname: string;
@@ -22,7 +23,17 @@ export class CreatePetWithPhotoSaga implements ISaga<CreatePetWithPhotoData, any
   constructor(
     @Inject(PET_SERVICE) private readonly petService: ClientProxy,
     @Inject(MEDIA_SERVICE) private readonly mediaService: ClientProxy,
+    private readonly mediaHttpService: MediaHttpService,
   ) {}
+
+  private async sendWithResilience<T>(observable$: any) {
+    return lastValueFrom(
+      observable$.pipe(
+        timeout(3000),
+        retry({ count: 2, delay: (_err, retryCount) => timer((retryCount + 1) * 300) }),
+      ),
+    );
+  }
 
   async execute(data: CreatePetWithPhotoData) {
     let pet: any = null;
@@ -31,7 +42,7 @@ export class CreatePetWithPhotoSaga implements ISaga<CreatePetWithPhotoData, any
       const createPetStep: SagaStep = {
         name: 'create_pet',
         execute: async () => {
-          pet = await lastValueFrom(
+          pet = await this.sendWithResilience(
             this.petService.send({ cmd: 'create_pet' }, data.petData),
           );
           return pet;
@@ -49,32 +60,20 @@ export class CreatePetWithPhotoSaga implements ISaga<CreatePetWithPhotoData, any
 
       if (data.photo) {
         const photoFile = data.photo;
-        const uploadPhotoStep: SagaStep = {
-          name: 'upload_photo',
-          execute: async () => {
-            const payload = {
-              file: {
-                data: photoFile.buffer.toString('base64'),
-                originalname: photoFile.originalname,
-                mimetype: photoFile.mimetype,
-                size: photoFile.size,
-              },
-              entityType: 'pet',
-              entityId: pet.id,
-            };
-            photo = await lastValueFrom(
-              this.mediaService.send({ cmd: 'upload_file' }, payload),
-            );
-            return photo;
-          },
-          compensate: async () => {
-            if (photo) {
-              await lastValueFrom(
-                this.mediaService.send({ cmd: 'delete_file' }, { id: photo.id }),
-              );
-            }
-          },
-        };
+          const uploadPhotoStep: SagaStep = {
+            name: 'upload_photo',
+            execute: async () => {
+              photo = await this.mediaHttpService.uploadFile(photoFile, 'pet', pet.id);
+              return photo;
+            },
+            compensate: async () => {
+              if (photo) {
+                await lastValueFrom(
+                  this.mediaService.send({ cmd: 'delete_file' }, { id: photo.id }),
+                );
+              }
+            },
+          };
         photo = await uploadPhotoStep.execute();
         this.executedSteps.push(uploadPhotoStep);
       }

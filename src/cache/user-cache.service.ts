@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ClientProxy } from '@nestjs/microservices';
-import { lastValueFrom, timeout } from 'rxjs';
+import { lastValueFrom, timeout, retry, timer } from 'rxjs';
 import { USER_SERVICE } from '../config';
 
 type CacheClient = {
@@ -16,6 +16,15 @@ export class UserCacheService {
     @Inject(CACHE_MANAGER) private cacheManager: CacheClient,
     @Inject(USER_SERVICE) private readonly userService: ClientProxy,
   ) {}
+
+  private async sendWithResilience<T>(observable$: any) {
+    return lastValueFrom(
+      observable$.pipe(
+        timeout(3000),
+        retry({ count: 2, delay: (_err, retryCount) => timer((retryCount + 1) * 300) }),
+      ),
+    );
+  }
 
   /**
    * Obtiene un usuario por credentialId con caché
@@ -35,10 +44,8 @@ export class UserCacheService {
 
     // Si no está en caché, consultar al servicio
     console.log(`[UserCache] 🔍 MISS - Consultando User Service para ${credentialId}`);
-    user = await lastValueFrom(
-      this.userService
-        .send({ cmd: 'find_user_by_credential_id' }, { credentialId })
-        .pipe(timeout(3000)),
+    user = await this.sendWithResilience(
+      this.userService.send({ cmd: 'find_user_by_credential_id' }, { credentialId }),
     );
 
     if (user) {
@@ -67,9 +74,7 @@ export class UserCacheService {
     }
 
     console.log(`[UserCache] 🔍 MISS - Consultando Pet Service para ${petId}`);
-    pet = await lastValueFrom(
-      petService.send({ cmd: 'find_pet' }, petId).pipe(timeout(3000)),
-    );
+    pet = await this.sendWithResilience(petService.send({ cmd: 'find_pet' }, petId));
 
     if (pet) {
       // Guardar en caché por 10 minutos

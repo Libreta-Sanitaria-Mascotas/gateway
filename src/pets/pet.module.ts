@@ -5,6 +5,7 @@ import { PET_SERVICE, MEDIA_SERVICE, getRabbitmqUrl } from 'src/config';
 import { UsersModule } from 'src/users/users.module';
 import { CustomCacheModule } from 'src/cache/cache.module';
 import { CreatePetWithPhotoSaga } from 'src/sagas/create-pet-with-photo.saga';
+import { MediaHttpService } from 'src/media/media-http.service';
 
 @Module({
   imports: [
@@ -36,7 +37,7 @@ import { CreatePetWithPhotoSaga } from 'src/sagas/create-pet-with-photo.saga';
     CustomCacheModule,
   ],
   controllers: [PetController],
-  providers: [CreatePetWithPhotoSaga],
+  providers: [CreatePetWithPhotoSaga, MediaHttpService],
   exports: [ClientsModule],
 })
 export class PetModule {}
