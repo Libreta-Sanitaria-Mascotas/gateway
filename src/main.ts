@@ -3,6 +3,8 @@ import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { envs } from './config';
+import { RpcToHttpExceptionFilter } from './common/filters/rpc-exception.filter';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const { port, nodeEnv } = envs;
@@ -14,6 +16,7 @@ async function bootstrap() {
     origin: true, // Allow all origins in development
     credentials: true,
   });
+  app.use(helmet());
   
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
@@ -23,6 +26,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+  app.useGlobalFilters(new RpcToHttpExceptionFilter());
   const config = new DocumentBuilder()
     .setTitle('Libreta Sanitaria Mascotas API')
     .setDescription('API for managing pet health records')

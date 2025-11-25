@@ -29,6 +29,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UserCacheService } from '../cache/user-cache.service';
 import { MediaHttpService } from 'src/media/media-http.service';
+import { AvatarValidationPipe } from './pipes/avatar-validation.pipe';
 
 @ApiTags('Users')
 @Controller('users')
@@ -69,7 +70,7 @@ export class UsersController {
       storage: memoryStorage(),
     }),
   )
-  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Req() req) {
+  async uploadAvatar(@UploadedFile(new AvatarValidationPipe()) file: Express.Multer.File, @Req() req) {
     const credentialId = req.user?.userId;
     
     // Get user data
