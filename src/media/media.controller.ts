@@ -214,7 +214,7 @@ export class MediaController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener archivos por entidad' })
-  @ApiQuery({ name: 'entityType', enum: ['pet', 'health'] })
+  @ApiQuery({ name: 'entityType', enum: ['pet', 'health', 'user'] })
   @ApiQuery({ name: 'entityId', description: 'ID de la entidad' })
   async getFilesByEntity(
     @Query('entityType') entityType: 'pet' | 'health',

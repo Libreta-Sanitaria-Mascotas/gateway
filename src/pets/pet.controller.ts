@@ -120,21 +120,60 @@ export class PetController {
     }
   }
 
+  @ApiOperation({ summary: 'Get pet by ID' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: number) {
-    //return this.clientPetService.send({ cmd: 'find_one_pet' }, { id });
-    return `find one pet ${id}`;
+  async findOne(@Param('id') id: string) {
+    try {
+      const pet = await lastValueFrom(
+        this.clientPetService
+          .send({ cmd: 'find_pet' }, id)
+          .pipe(timeout(3000)),
+      );
+      if (!pet)
+        throw new RpcException({
+          statusCode: 404,
+          message: 'Mascota no encontrada',
+        });
+      return pet;
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
+  @ApiOperation({ summary: 'Update pet by ID' })
+  @ApiBody({ type: UpdatePetDto })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  update(@Param('id') id: number, @Body() updatePetDto: UpdatePetDto) {
-    //return this.clientPetService.send({ cmd: 'update_pet' }, { ...updatePetDto, id });
-    return `update pet ${JSON.stringify(updatePetDto)} ${id}`;
+  async update(@Param('id') id: string, @Body() updatePetDto: UpdatePetDto) {
+    try {
+      const pet = await lastValueFrom(
+        this.clientPetService
+          .send({ cmd: 'update_pet' }, { ...updatePetDto, id })
+          .pipe(timeout(3000)),
+      );
+      return pet;
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
+  @ApiOperation({ summary: 'Delete pet by ID' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: number) {
-    return `delete pet ${id}`;
-    //return this.clientPetService.send({ cmd: 'remove_pet' }, { id });
+  async remove(@Param('id') id: string) {
+    try {
+      await lastValueFrom(
+        this.clientPetService
+          .send({ cmd: 'delete_pet' }, id)
+          .pipe(timeout(3000)),
+      );
+      return { message: 'Mascota eliminada correctamente' };
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 }
