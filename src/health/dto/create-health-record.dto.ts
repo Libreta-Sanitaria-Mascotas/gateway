@@ -1,5 +1,17 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import { IsArray, IsDateString, IsIn, IsOptional, IsString, IsUUID } from "class-validator";
+
+const normalizeDate = (value: string) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  const ddMmYyyyMatch = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(trimmed);
+  if (ddMmYyyyMatch) {
+    const [, dd, mm, yyyy] = ddMmYyyyMatch;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return trimmed;
+};
 
 export class CreateHealthRecordDto {
 
@@ -21,6 +33,7 @@ export class CreateHealthRecordDto {
         example: '2023-01-01',
         description: 'Date of the health record'
     })
+    @Transform(({ value }) => normalizeDate(value))
     @IsDateString()
     date: string;
 
@@ -63,4 +76,12 @@ export class CreateHealthRecordDto {
     @IsOptional()
     @IsUUID('all', { each: true })
     mediaIds?: string[];
+
+    @ApiPropertyOptional({
+        example: '123e4567-e89b-12d3-a456-426614174111',
+        description: 'OwnerId used only for authorization (not persisted)'
+    })
+    @IsUUID()
+    @IsOptional()
+    ownerId?: string;
 }

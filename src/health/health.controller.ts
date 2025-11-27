@@ -1,12 +1,39 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req, UseGuards } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { CreateHealthRecordDto } from './dto/create-health.-record.dto';
+import { CreateHealthRecordDto } from './dto/create-health-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
 import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
 import { lastValueFrom, timeout } from 'rxjs';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UserCacheService } from 'src/cache/user-cache.service';
+
+const healthTypeLabelsEsAr: Record<string, string> = {
+  vaccine: 'Vacunación',
+  consultation: 'Consulta',
+  deworming: 'Desparasitación',
+  analysis: 'Análisis',
+  other: 'Otro',
+};
+
+const formatDateDisplay = (value: string | Date) => {
+  if (!value) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const dd = `${date.getUTCDate()}`.padStart(2, '0');
+  const mm = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+  const yyyy = date.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+const withPresentation = <T extends { type?: string; date?: string | Date }>(record: T) =>
+  record
+    ? {
+        ...record,
+        typeLabel: record.type ? healthTypeLabelsEsAr[record.type] ?? record.type : undefined,
+        displayDate: record.date ? formatDateDisplay(record.date) : undefined,
+      }
+    : record;
 
 
 @ApiTags('Health')
@@ -53,13 +80,16 @@ export class HealthController {
           message: 'Not authorized',
         });
       }
-      
+
       const healthRecord = await lastValueFrom(
         this.clientHealthService
-          .send({ cmd: 'create_health_record' }, { ...createHealthRecordDto, petId: pet.id })
+          .send(
+            { cmd: 'create_health_record' },
+            { ...createHealthRecordDto, petId: pet.id, ownerId: user.id },
+          )
           .pipe(timeout(3000)),
       );
-      return healthRecord;
+      return withPresentation(healthRecord);
     } catch (error) {
       throw error instanceof RpcException
         ? error
@@ -99,7 +129,7 @@ export class HealthController {
         ),
       );
 
-      return recordsPerPet.flat();
+      return recordsPerPet.flat().map((record) => withPresentation(record));
     } catch (error) {
       throw error instanceof RpcException
         ? error
@@ -138,11 +168,12 @@ export class HealthController {
           message: 'Not authorized',
         });
       }
-      return await lastValueFrom(
+      const records = await lastValueFrom(
         this.clientHealthService
           .send({ cmd: 'find_all_health_records_by_pet_id' }, { petId })
           .pipe(timeout(3000)),
       );
+      return records?.map((record) => withPresentation(record)) ?? [];
     } catch (error) {
       throw new RpcException(error);
     }
@@ -180,7 +211,7 @@ export class HealthController {
         throw new RpcException({ statusCode: 403, message: 'Not authorized' });
       }
 
-      return record;
+      return withPresentation(record);
     } catch (error) {
       throw new RpcException(error);
     }
@@ -192,22 +223,78 @@ export class HealthController {
   async update(
     @Param('id') id: string,
     @Body() updateHealthRecordDto: UpdateHealthRecordDto,
+    @Req() req,
   ) {
-    return await lastValueFrom(
+    const credentialId = req.user?.userId;
+    const user = await this.userCacheService.getUserByCredentialId(credentialId);
+    if (!user) {
+      throw new RpcException({ statusCode: 404, message: 'User not found' });
+    }
+
+    const record = await lastValueFrom(
+      this.clientHealthService
+        .send({ cmd: 'find_health_record_by_id' }, { id })
+        .pipe(timeout(3000)),
+    );
+
+    if (!record) {
+      throw new RpcException({ statusCode: 404, message: 'Health record not found' });
+    }
+
+    const pet = await this.userCacheService.getPetById(
+      record.petId,
+      this.clientPetService,
+    );
+    if (!pet) {
+      throw new RpcException({ statusCode: 404, message: 'Pet not found' });
+    }
+    if (pet.ownerId !== user.id) {
+      throw new RpcException({ statusCode: 403, message: 'Not authorized' });
+    }
+
+    const updated = await lastValueFrom(
       this.clientHealthService.send(
         { cmd: 'update_health_record_by_id' },
-        { ...updateHealthRecordDto, id },
+        { ...updateHealthRecordDto, id, ownerId: user.id },
       ).pipe(timeout(3000)),
     );
+
+    return withPresentation(updated);
   }
 
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Req() req) {
+    const credentialId = req.user?.userId;
+    const user = await this.userCacheService.getUserByCredentialId(credentialId);
+    if (!user) {
+      throw new RpcException({ statusCode: 404, message: 'User not found' });
+    }
+
+    const record = await lastValueFrom(
+      this.clientHealthService
+        .send({ cmd: 'find_health_record_by_id' }, { id })
+        .pipe(timeout(3000)),
+    );
+    if (!record) {
+      throw new RpcException({ statusCode: 404, message: 'Health record not found' });
+    }
+
+    const pet = await this.userCacheService.getPetById(
+      record.petId,
+      this.clientPetService,
+    );
+    if (!pet) {
+      throw new RpcException({ statusCode: 404, message: 'Pet not found' });
+    }
+    if (pet.ownerId !== user.id) {
+      throw new RpcException({ statusCode: 403, message: 'Not authorized' });
+    }
+
     return await lastValueFrom(
       this.clientHealthService
-        .send({ cmd: 'delete_health_record_by_id' }, { id })
+        .send({ cmd: 'delete_health_record_by_id' }, { id, ownerId: user.id })
         .pipe(timeout(3000)),
     );
   }
