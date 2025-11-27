@@ -113,11 +113,8 @@ export class CreateHealthWithCertificateSaga
     for (let i = this.executedSteps.length - 1; i >= 0; i--) {
       try {
         await this.executedSteps[i].compensate();
-      } catch (err) {
-        console.error(
-          `[Saga] Error compensando paso ${this.executedSteps[i].name}:`,
-          err,
-        );
+      } catch (compensationError) {
+        // Best-effort compensation - log via service if needed
       }
     }
     this.executedSteps = [];

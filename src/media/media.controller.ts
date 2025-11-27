@@ -16,6 +16,7 @@ import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagg
 import { Response } from 'express';
 import { MediaHttpService } from './media-http.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { IngestFromUrlDto } from './dto/ingest-from-url.dto';
 
 @ApiTags('Media')
 @Controller('media')
@@ -57,6 +58,14 @@ export class MediaController {
   @Post(':id')
   async updateMetadata(@Param('id') id: string, @Body() body: Record<string, any>) {
     return this.mediaHttpService.updateMetadata(id, body);
+  }
+
+  @ApiOperation({ summary: 'Ingestar archivo desde URL remota (procesa media-service)' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('ingest-url')
+  async ingestFromUrl(@Body() body: IngestFromUrlDto) {
+    return this.mediaHttpService.ingestFromUrl(body.url, body.entityType, body.entityId);
   }
 
   @ApiOperation({ summary: 'Obtener archivo por ID (proxy a media-service)' })

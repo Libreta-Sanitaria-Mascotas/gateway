@@ -67,6 +67,46 @@ export class HealthController {
     }
   }
 
+  @ApiOperation({ summary: 'Get all health records for current user pets' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  async findAllForUser(@Req() req) {
+    try {
+      const credentialId = req.user?.userId;
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
+      if (!user) {
+        throw new RpcException({ statusCode: 404, message: 'User not found' });
+      }
+
+      const pets = await lastValueFrom(
+        this.clientPetService
+          .send({ cmd: 'find_all_pets_by_owner_id' }, { ownerId: user.id })
+          .pipe(timeout(3000)),
+      );
+
+      if (!pets || pets.length === 0) {
+        return [];
+      }
+
+      const recordsPerPet = await Promise.all(
+        pets.map((pet) =>
+          lastValueFrom(
+            this.clientHealthService
+              .send({ cmd: 'find_all_health_records_by_pet_id' }, { petId: pet.id })
+              .pipe(timeout(3000)),
+          ).catch(() => []),
+        ),
+      );
+
+      return recordsPerPet.flat();
+    } catch (error) {
+      throw error instanceof RpcException
+        ? error
+        : new RpcException({ statusCode: 500, message: error?.message ?? 'Unexpected error' });
+    }
+  }
+
   @ApiOperation({ summary: 'Get all health records by pet id' })
   @Get('pet/:petId')
   async findAll(@Param('petId') petId: string) {

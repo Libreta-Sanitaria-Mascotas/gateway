@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
 export class CreatePetDto {
   @ApiProperty({
     description: 'The name of the pet',
@@ -47,7 +48,6 @@ export class CreatePetDto {
     example: 'male',
   })
   @IsString()
-  @IsNotEmpty()
   @IsIn(['male', 'female'])
   @IsOptional()
   sex?: 'male' | 'female';
@@ -56,7 +56,6 @@ export class CreatePetDto {
     description: 'The ID of the owner of the pet',
     example: '12345678-1234-1234-1234-123456789012',
   })
-  @IsNotEmpty()
   @IsUUID()
   @IsOptional()
   ownerId?: string;
