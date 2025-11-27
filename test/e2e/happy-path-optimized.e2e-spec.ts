@@ -31,21 +31,31 @@ describe('Happy Path Optimizado (e2e)', () => {
     const registerRes = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send({
+        firstName: 'Test',
+        lastName: 'User',
         email: `test_${timestamp}@example.com`,
         password: 'Test123!',
       })
       .expect(201);
 
     authToken = registerRes.body.access_token;
+    const refreshToken = registerRes.body.refresh_token;
 
-    await request(app.getHttpServer())
-      .post('/api/users')
+    const meRes = await request(app.getHttpServer())
+      .get('/api/users/me')
       .set('Authorization', `Bearer ${authToken}`)
-      .send({
-        firstName: 'Test',
-        lastName: 'User',
-      })
+      .expect(200);
+
+    expect(meRes.body).toHaveProperty('id');
+    const credentialId = meRes.body.credentialId;
+    expect(credentialId).toBeDefined();
+
+    const refreshRes = await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refresh_token: refreshToken })
       .expect(201);
+
+    expect(refreshRes.body.access_token).toBeDefined();
 
     const petRes = await request(app.getHttpServer())
       .post('/api/pets')

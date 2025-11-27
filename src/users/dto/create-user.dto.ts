@@ -15,4 +15,9 @@ export class CreateUserDto {
   @IsString()
   @ApiProperty()
   credentialId?: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiProperty()
+  avatarUrl?: string;
 }
