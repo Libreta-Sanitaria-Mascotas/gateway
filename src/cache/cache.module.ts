@@ -4,6 +4,7 @@ import { redisStore } from 'cache-manager-redis-store';
 import { UserCacheService } from './user-cache.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { USER_SERVICE, getRabbitmqUrl } from '../config';
+import { LoggerService } from 'src/common/logger/logger.service';
 
 @Module({
   imports: [
@@ -36,7 +37,13 @@ import { USER_SERVICE, getRabbitmqUrl } from '../config';
       },
     ]),
   ],
-  providers: [UserCacheService],
+  providers: [
+    UserCacheService,
+    {
+      provide: LoggerService,
+      useFactory: () => new LoggerService('CacheModule'),
+    },
+  ],
   exports: [CacheModule, UserCacheService],
 })
 export class CustomCacheModule {}

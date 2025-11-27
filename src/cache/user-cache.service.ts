@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, timeout, retry, timer } from 'rxjs';
 import { USER_SERVICE } from '../config';
+import { LoggerService } from '../common/logger/logger.service';
 
 type CacheClient = {
   get: <T = any>(key: string) => Promise<T | undefined>;
@@ -15,6 +16,7 @@ export class UserCacheService {
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: CacheClient,
     @Inject(USER_SERVICE) private readonly userService: ClientProxy,
+    private readonly logger: LoggerService,
   ) {}
 
   private async sendWithResilience<T>(observable$: any) {
@@ -38,12 +40,12 @@ export class UserCacheService {
     let user = await this.cacheManager.get(cacheKey);
 
     if (user) {
-      console.log(`[UserCache] ⚡ HIT - Usuario ${credentialId}`);
+      this.logger.debug(`Cache HIT - User ${credentialId}`, 'UserCacheService.getUserByCredentialId');
       return user;
     }
 
     // Si no está en caché, consultar al servicio
-    console.log(`[UserCache] 🔍 MISS - Consultando User Service para ${credentialId}`);
+    this.logger.debug(`Cache MISS - Fetching user ${credentialId} from User Service`, 'UserCacheService.getUserByCredentialId');
     user = await this.sendWithResilience(
       this.userService.send({ cmd: 'find_user_by_credential_id' }, { credentialId }),
     );
@@ -51,7 +53,7 @@ export class UserCacheService {
     if (user) {
       // Guardar en caché por 5 minutos
       await this.cacheManager.set(cacheKey, user, 300);
-      console.log(`[UserCache] 💾 Cached - Usuario ${credentialId} guardado en caché`);
+      this.logger.debug(`Cached user ${credentialId}`, 'UserCacheService.getUserByCredentialId');
     }
 
     return user;
@@ -69,17 +71,17 @@ export class UserCacheService {
     let pet = await this.cacheManager.get(cacheKey);
 
     if (pet) {
-      console.log(`[UserCache] ⚡ HIT - Mascota ${petId}`);
+      this.logger.debug(`Cache HIT - Pet ${petId}`, 'UserCacheService.getPetById');
       return pet;
     }
 
-    console.log(`[UserCache] 🔍 MISS - Consultando Pet Service para ${petId}`);
+    this.logger.debug(`Cache MISS - Fetching pet ${petId} from Pet Service`, 'UserCacheService.getPetById');
     pet = await this.sendWithResilience(petService.send({ cmd: 'find_pet' }, petId));
 
     if (pet) {
       // Guardar en caché por 10 minutos
       await this.cacheManager.set(cacheKey, pet, 600);
-      console.log(`[UserCache] 💾 Cached - Mascota ${petId} guardada en caché`);
+      this.logger.debug(`Cached pet ${petId}`, 'UserCacheService.getPetById');
     }
 
     return pet;
@@ -92,7 +94,7 @@ export class UserCacheService {
   async invalidateUser(credentialId: string) {
     const cacheKey = `user:credential:${credentialId}`;
     await this.cacheManager.del(cacheKey);
-    console.log(`[UserCache] 🗑️ INVALIDATED - Usuario ${credentialId}`);
+    this.logger.debug(`Cache invalidated - User ${credentialId}`, 'UserCacheService.invalidateUser');
   }
 
   /**
@@ -102,7 +104,7 @@ export class UserCacheService {
   async invalidatePet(petId: string) {
     const cacheKey = `pet:${petId}`;
     await this.cacheManager.del(cacheKey);
-    console.log(`[UserCache] 🗑️ INVALIDATED - Mascota ${petId}`);
+    this.logger.debug(`Cache invalidated - Pet ${petId}`, 'UserCacheService.invalidatePet');
   }
 
   /**
@@ -112,6 +114,6 @@ export class UserCacheService {
   async clearAll() {
     // Note: reset() may not be available in all cache-manager versions
     // In production, consider invalidating specific keys or using Redis FLUSHDB
-    console.log(`[UserCache] 🧹 CLEAR - Limpieza de caché no implementada (usar invalidación específica)`);
+    this.logger.warn('Cache clear not implemented - use specific invalidation', 'UserCacheService.clearAll');
   }
 }

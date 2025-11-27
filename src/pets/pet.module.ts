@@ -6,6 +6,7 @@ import { UsersModule } from 'src/users/users.module';
 import { CustomCacheModule } from 'src/cache/cache.module';
 import { CreatePetWithPhotoSaga } from 'src/sagas/create-pet-with-photo.saga';
 import { MediaHttpService } from 'src/media/media-http.service';
+import { LoggerService } from 'src/common/logger/logger.service';
 
 @Module({
   imports: [
@@ -37,7 +38,14 @@ import { MediaHttpService } from 'src/media/media-http.service';
     CustomCacheModule,
   ],
   controllers: [PetController],
-  providers: [CreatePetWithPhotoSaga, MediaHttpService],
+  providers: [
+    CreatePetWithPhotoSaga,
+    MediaHttpService,
+    {
+      provide: LoggerService,
+      useFactory: () => new LoggerService('PetModule'),
+    },
+  ],
   exports: [ClientsModule],
 })
 export class PetModule {}

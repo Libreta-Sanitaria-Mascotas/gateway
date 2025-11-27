@@ -10,10 +10,10 @@ async function bootstrap() {
   const { port, nodeEnv } = envs;
   const logger = new Logger('Gateway');
   const app = await NestFactory.create(AppModule);
-  
-  // Enable CORS for web frontend
+
+  // Enable CORS for web/frontend using ALLOWED_ORIGINS (comma-separated)
   app.enableCors({
-    origin: true, // Allow all origins in development
+    origin: envs.allowedOrigins.length ? envs.allowedOrigins : true,
     credentials: true,
   });
   app.use(helmet());

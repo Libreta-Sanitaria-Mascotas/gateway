@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { of } from 'rxjs';
 import { UserCacheService } from './user-cache.service';
 import { USER_SERVICE } from '../config';
+import { LoggerService } from '../common/logger/logger.service';
 
 describe('UserCacheService', () => {
   let service: UserCacheService;
@@ -25,6 +26,14 @@ describe('UserCacheService', () => {
           provide: USER_SERVICE,
           useValue: {
             send: jest.fn(),
+          },
+        },
+        {
+          provide: LoggerService,
+          useValue: {
+            debug: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
           },
         },
       ],

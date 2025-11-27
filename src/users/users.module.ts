@@ -4,6 +4,7 @@ import { MEDIA_SERVICE, USER_SERVICE, getRabbitmqUrl } from '../config';
 import { UsersController } from './users.controller';
 import { MediaHttpService } from 'src/media/media-http.service';
 import { CustomCacheModule } from 'src/cache/cache.module';
+import { LoggerService } from 'src/common/logger/logger.service';
 
 @Module({
   imports: [
@@ -34,7 +35,13 @@ import { CustomCacheModule } from 'src/cache/cache.module';
     ]),
   ],
   controllers: [UsersController],
-  providers: [MediaHttpService],
+  providers: [
+    MediaHttpService,
+    {
+      provide: LoggerService,
+      useFactory: () => new LoggerService('UsersModule'),
+    },
+  ],
   exports: [ClientsModule],
 })
 export class UsersModule { }
