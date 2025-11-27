@@ -108,9 +108,20 @@ export class HealthController {
   }
 
   @ApiOperation({ summary: 'Get all health records by pet id' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get('pet/:petId')
-  async findAll(@Param('petId') petId: string) {
+  async findAll(@Param('petId') petId: string, @Req() req) {
     try {
+      const credentialId = req.user?.userId;
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
+      if (!user) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'User not found',
+        });
+      }
+
       const pet = await this.userCacheService.getPetById(
         petId,
         this.clientPetService,
@@ -119,6 +130,12 @@ export class HealthController {
         throw new RpcException({
           statusCode: 404,
           message: 'Pet not found',
+        });
+      }
+      if (pet.ownerId !== user.id) {
+        throw new RpcException({
+          statusCode: 403,
+          message: 'Not authorized',
         });
       }
       return await lastValueFrom(
@@ -131,13 +148,42 @@ export class HealthController {
     }
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return await lastValueFrom(
-      this.clientHealthService
-        .send({ cmd: 'find_health_record_by_id' }, { id })
-        .pipe(timeout(3000)),
-    );
+  async findOne(@Param('id') id: string, @Req() req) {
+    try {
+      const credentialId = req.user?.userId;
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
+      if (!user) {
+        throw new RpcException({ statusCode: 404, message: 'User not found' });
+      }
+
+      const record = await lastValueFrom(
+        this.clientHealthService
+          .send({ cmd: 'find_health_record_by_id' }, { id })
+          .pipe(timeout(3000)),
+      );
+
+      if (!record) {
+        throw new RpcException({ statusCode: 404, message: 'Health record not found' });
+      }
+
+      const pet = await this.userCacheService.getPetById(
+        record.petId,
+        this.clientPetService,
+      );
+      if (!pet) {
+        throw new RpcException({ statusCode: 404, message: 'Pet not found' });
+      }
+      if (pet.ownerId !== user.id) {
+        throw new RpcException({ statusCode: 403, message: 'Not authorized' });
+      }
+
+      return record;
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   @Patch(':id')

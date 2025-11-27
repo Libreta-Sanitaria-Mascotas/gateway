@@ -41,7 +41,10 @@ export class MediaHttpService {
       this.logger.debug(`Uploading to: ${uploadUrl}`, 'MediaHttpService.uploadFile');
 
       const { data } = await axios.post(uploadUrl, form, {
-        headers: form.getHeaders(),
+        headers: {
+          ...form.getHeaders(),
+          ...(envs.mediaApiKey ? { 'x-api-key': envs.mediaApiKey } : {}),
+        },
         maxContentLength: maxSizeBytes,
         maxBodyLength: maxSizeBytes,
         timeout: 5000,
@@ -74,6 +77,7 @@ export class MediaHttpService {
     try {
       const updateUrl = `${this.baseUrl}/media/${id}`;
       const { data } = await axios.post(updateUrl, body, {
+        headers: envs.mediaApiKey ? { 'x-api-key': envs.mediaApiKey } : undefined,
         timeout: 5000,
       });
       return data;
@@ -113,6 +117,7 @@ export class MediaHttpService {
       const payload = { url, entityType, entityId };
 
       const { data } = await axios.post(ingestUrl, payload, {
+        headers: envs.mediaApiKey ? { 'x-api-key': envs.mediaApiKey } : undefined,
         timeout: 10000,
         maxContentLength: 10 * 1024 * 1024, // 10MB
         maxBodyLength: 10 * 1024 * 1024, // 10MB

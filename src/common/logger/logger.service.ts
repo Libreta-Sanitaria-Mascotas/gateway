@@ -1,5 +1,6 @@
 import { Injectable, LoggerService as NestLoggerService } from '@nestjs/common';
 import * as winston from 'winston';
+import { requestContext } from '../context/request-context';
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
@@ -41,23 +42,28 @@ export class LoggerService implements NestLoggerService {
     }
   }
 
+  private withRequestMeta(meta?: Record<string, any>) {
+    const requestId = requestContext.getRequestId();
+    return requestId ? { requestId, ...meta } : meta;
+  }
+
   log(message: string, context?: string) {
-    this.logger.info(message, { context });
+    this.logger.info(message, this.withRequestMeta({ context }));
   }
 
   error(message: string, trace?: string, context?: string) {
-    this.logger.error(message, { trace, context });
+    this.logger.error(message, this.withRequestMeta({ trace, context }));
   }
 
   warn(message: string, context?: string) {
-    this.logger.warn(message, { context });
+    this.logger.warn(message, this.withRequestMeta({ context }));
   }
 
   debug(message: string, context?: string) {
-    this.logger.debug(message, { context });
+    this.logger.debug(message, this.withRequestMeta({ context }));
   }
 
   verbose(message: string, context?: string) {
-    this.logger.verbose(message, { context });
+    this.logger.verbose(message, this.withRequestMeta({ context }));
   }
 }

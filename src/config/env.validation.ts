@@ -15,6 +15,7 @@ export const envValidationSchema = Joi.object({
   PET_SERVICE: Joi.string().required(),
   PET_SERVICE_PORT: Joi.number().required(),
   MEDIA_SERVICE_URL: Joi.string().uri().required(),
+  MEDIA_API_KEY: Joi.string().allow('').default(''),
   ALLOWED_ORIGINS: Joi.string().required(),
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRES_IN: Joi.string().required(),

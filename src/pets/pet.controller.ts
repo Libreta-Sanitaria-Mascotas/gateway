@@ -129,8 +129,17 @@ export class PetController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string, @Req() req) {
     try {
+      const credentialId = req.user?.userId;
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
+      if (!user) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'Usuario no encontrado',
+        });
+      }
+
       const pet = await lastValueFrom(
         this.clientPetService
           .send({ cmd: 'find_pet' }, id)
@@ -141,6 +150,12 @@ export class PetController {
           statusCode: 404,
           message: 'Mascota no encontrada',
         });
+      if (pet.ownerId !== user.id) {
+        throw new RpcException({
+          statusCode: 403,
+          message: 'No autorizado',
+        });
+      }
       return pet;
     } catch (error) {
       throw new RpcException(error);

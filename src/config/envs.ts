@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import { envValidationSchema } from './env.validation';
+import { loadEnv } from './env.loader';
 
 interface EnvVars {
   NODE_ENV: string;
@@ -14,6 +14,7 @@ interface EnvVars {
   PET_SERVICE: string;
   PET_SERVICE_PORT: number;
   MEDIA_SERVICE_URL: string;
+  MEDIA_API_KEY: string;
   ALLOWED_ORIGINS: string;
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
@@ -21,13 +22,7 @@ interface EnvVars {
   REDIS_PORT: number;
 }
 
-const {error, value } = envValidationSchema.validate(process.env);
-
-if (error) {
-  throw new Error(`Config validation error: ${error.message}`);
-}
-
-const envVars: EnvVars = value;
+const envVars = loadEnv<EnvVars>(envValidationSchema);
 
 export const envs = {
   nodeEnv: envVars.NODE_ENV,
@@ -42,6 +37,7 @@ export const envs = {
   authService: envVars.AUTH_SERVICE,
   authServicePort: envVars.AUTH_SERVICE_PORT,
   mediaServiceUrl: envVars.MEDIA_SERVICE_URL,
+  mediaApiKey: envVars.MEDIA_API_KEY,
   allowedOrigins: envVars.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean),
   jwt: {
     secret: envVars.JWT_SECRET,

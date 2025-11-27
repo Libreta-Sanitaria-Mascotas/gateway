@@ -43,6 +43,7 @@ npm run test:e2e -- happy-path-optimized.e2e-spec.ts --runInBand
   - `POST /api/pets/with-photo` (saga mascota + foto)
   - `POST /api/media/upload` y `/upload-stream` (valida mime/size, link a health)
   - Health y Pets consumen caché para validar usuario/mascota.
+- Correlación de requests: se genera/propa `X-Request-Id` en cada request HTTP y se incluye en logs.
 
 ## Workflows sugeridos
 - CI básico:
