@@ -1,12 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Inject, Req, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { CreateHealthRecordDto } from './dto/create-health-record.dto';
 import { UpdateHealthRecordDto } from './dto/update-health-record.dto';
 import { HEALTH_SERVICE, PET_SERVICE } from 'src/config';
 import { lastValueFrom, timeout } from 'rxjs';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UserCacheService } from 'src/cache/user-cache.service';
+import { CreateHealthWithAttachmentsSaga } from 'src/sagas/create-health-with-attachments.saga';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 const healthTypeLabelsEsAr: Record<string, string> = {
   vaccine: 'Vacunación',
@@ -26,12 +29,19 @@ const formatDateDisplay = (value: string | Date) => {
   return `${dd}-${mm}-${yyyy}`;
 };
 
-const withPresentation = <T extends { type?: string; date?: string | Date }>(record: T) =>
+const withPresentation = <
+  T extends { type?: string; date?: string | Date; nextVisitDate?: string | Date; hasNextVisit?: boolean }
+>(
+  record: T,
+) =>
   record
     ? {
         ...record,
+        hasNextVisit: !!record.hasNextVisit,
         typeLabel: record.type ? healthTypeLabelsEsAr[record.type] ?? record.type : undefined,
         displayDate: record.date ? formatDateDisplay(record.date) : undefined,
+        displayNextVisitDate:
+          record.hasNextVisit && record.nextVisitDate ? formatDateDisplay(record.nextVisitDate) : undefined,
       }
     : record;
 
@@ -43,6 +53,7 @@ export class HealthController {
     @Inject(HEALTH_SERVICE) private readonly clientHealthService: ClientProxy,
     @Inject(PET_SERVICE) private readonly clientPetService: ClientProxy,
     private readonly userCacheService: UserCacheService,
+    private readonly createHealthWithAttachmentsSaga: CreateHealthWithAttachmentsSaga,
   ) { }
 
   @ApiOperation({ summary: 'Create a new health record' })
@@ -94,6 +105,75 @@ export class HealthController {
       throw error instanceof RpcException
         ? error
         : new RpcException({ statusCode: error.getStatus(), message: error.message });
+    }
+  }
+
+  @ApiOperation({ summary: 'Create a new health record with attachments (Saga)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: CreateHealthRecordDto })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: memoryStorage(),
+    }),
+  )
+  @Post('with-media')
+  async createWithMedia(
+    @Body() createHealthRecordDto: CreateHealthRecordDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req,
+  ) {
+    try {
+      const credentialId = req.user?.userId;
+
+      const user = await this.userCacheService.getUserByCredentialId(credentialId);
+      if (!user) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'User not found',
+        });
+      }
+
+      const pet = await this.userCacheService.getPetById(
+        createHealthRecordDto.petId,
+        this.clientPetService,
+      );
+      if (!pet) {
+        throw new RpcException({
+          statusCode: 404,
+          message: 'Pet not found',
+        });
+      }
+      if (pet.ownerId !== user.id) {
+        throw new RpcException({
+          statusCode: 403,
+          message: 'Not authorized',
+        });
+      }
+
+      const attachments = (files ?? []).map((file) => ({
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      }));
+
+      const result = await this.createHealthWithAttachmentsSaga.execute({
+        healthData: { ...createHealthRecordDto, petId: pet.id, ownerId: user.id },
+        attachments,
+      });
+      return {
+        healthRecord: withPresentation(result.healthRecord),
+        attachments: result.attachments ?? [],
+      };
+    } catch (error) {
+      throw error instanceof RpcException
+        ? error
+        : new RpcException({
+            statusCode: error?.statusCode ?? error?.status ?? 500,
+            message: error?.message ?? 'Unexpected error creating health record with attachments',
+          });
     }
   }
 

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { IsArray, IsDateString, IsIn, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUUID, ValidateIf } from "class-validator";
 
 const normalizeDate = (value: string) => {
   if (typeof value !== 'string') return value;
@@ -11,6 +11,17 @@ const normalizeDate = (value: string) => {
     return `${yyyy}-${mm}-${dd}`;
   }
   return trimmed;
+};
+
+const toBoolean = (value: unknown) => {
+  if (value === undefined || value === null) return value as any;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    return ['true', '1', 'yes', 'on'].includes(normalized);
+  }
+  return value;
 };
 
 export class CreateHealthRecordDto {
@@ -62,11 +73,29 @@ export class CreateHealthRecordDto {
 
     @ApiProperty({
         example: 'Clinic of the health record',
-        description: 'Clinic of the health record'
+    description: 'Clinic of the health record'
     })
     @IsString()
     @IsOptional()
     clinic?: string;
+
+    @ApiPropertyOptional({
+        example: true,
+        description: 'Indica si hay una próxima visita agendada'
+    })
+    @Transform(({ value }) => toBoolean(value))
+    @IsBoolean()
+    @IsOptional()
+    hasNextVisit?: boolean;
+
+    @ApiPropertyOptional({
+        example: '2023-01-15',
+        description: 'Fecha de la próxima visita si corresponde'
+    })
+    @Transform(({ value }) => normalizeDate(value))
+    @ValidateIf((record) => record.hasNextVisit === true)
+    @IsDateString()
+    nextVisitDate?: string;
 
     @ApiProperty({
         example: ['123e4567-e89b-12d3-a456-426614174000'],

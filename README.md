@@ -113,48 +113,45 @@ sequenceDiagram
 
 ---
 
-#### SAGA-02: CreateHealthWithCertificateSaga
+#### SAGA-02: CreateHealthWithAttachmentsSaga
 
-**Objetivo**: Crear registro de salud con certificado de forma atómica
+**Objetivo**: Crear registro de salud y adjuntar uno o varios documentos (PDF/imágenes) de forma atómica
 
 **Pasos**:
 1. **Crear Registro**: Health Service crea registro de salud
-2. **Subir Certificado**: Media Service almacena certificado
-3. **Vincular Media**: Health Service vincula media al registro
+2. **Subir Adjuntos**: Media Service almacena cada archivo con `entityType=health` y `entityId=registro.id`
+3. **Vincular Media**: Health Service vincula cada `mediaId` al registro
 
 **Compensación**:
-- Si falla paso 3: Eliminar certificado y registro
-- Si falla paso 2: Eliminar registro creado
+- Si falla carga o vínculo de adjuntos: eliminar archivos subidos y el registro creado
 
 **Diagrama de Flujo**:
 
 ```mermaid
 sequenceDiagram
     participant G as Gateway
-    participant Saga as CreateHealthWithCertificateSaga
+    participant Saga as CreateHealthWithAttachmentsSaga
     participant HS as Health Service
     participant MS as Media Service
     
-    G->>Saga: execute({healthData, certificate})
+    G->>Saga: execute({healthData, attachments[]})
     
     Note over Saga: Paso 1: Crear Registro
     Saga->>HS: create_health_record
     HS-->>Saga: HealthRecord {id}
     
-    Note over Saga: Paso 2: Subir Certificado
-    Saga->>MS: upload (HTTP)
-    MS-->>Saga: Media {id}
+    loop Por cada adjunto
+        Saga->>MS: upload (HTTP, entityId=healthRecord.id)
+        MS-->>Saga: Media {id}
+        Saga->>HS: link_media {healthRecordId, mediaId}
+        HS-->>Saga: Vinculación exitosa
+    end
     
-    Note over Saga: Paso 3: Vincular Media
-    Saga->>HS: link_media {healthRecordId, mediaId}
-    HS-->>Saga: Vinculación exitosa
+    Saga-->>G: Success {healthRecord con mediaIds, attachments}
     
-    Saga-->>G: Success {healthRecord, certificate}
-    
-    Note over Saga: Si falla cualquier paso
-    Saga->>HS: delete_health_record (compensación)
+    Note over Saga: Si falla algún paso
     Saga->>MS: delete_file (compensación)
-    Saga-->>G: Error + Rollback completado
+    Saga->>HS: delete_health_record (compensación)
 ```
 
 **Resiliencia**:
@@ -243,7 +240,7 @@ sequenceDiagram
 | Método | Endpoint | Descripción | Auth |
 |--------|----------|-------------|------|
 | POST | `/health` | Crear registro | ✅ |
-| POST | `/health/with-certificate` | Crear con certificado (Saga) | ✅ |
+| POST | `/health/with-media` | Crear con adjuntos (Saga) | ✅ |
 | GET | `/health` | Listar mis registros | ✅ |
 | GET | `/health/pet/:petId` | Listar por mascota | ✅ |
 | GET | `/health/:id` | Obtener registro | ✅ |

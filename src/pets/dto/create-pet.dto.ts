@@ -2,12 +2,17 @@ import {
   IsDate,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
+export const PET_SIZES = ['small', 'medium', 'large'] as const;
+export type PetSize = (typeof PET_SIZES)[number];
 
 export class CreatePetDto {
   @ApiProperty({
@@ -68,4 +73,25 @@ export class CreatePetDto {
   @IsUUID()
   @IsOptional()
   mediaId?: string;
+
+  @ApiProperty({
+    description: 'Tamaño de la mascota',
+    example: 'medium',
+    enum: PET_SIZES,
+    required: false,
+  })
+  @IsIn(PET_SIZES)
+  @IsOptional()
+  size?: PetSize;
+
+  @ApiProperty({
+    description: 'Peso de la mascota en kilogramos',
+    example: 8.5,
+    required: false,
+  })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @IsOptional()
+  @Type(() => Number)
+  weight?: number;
 }

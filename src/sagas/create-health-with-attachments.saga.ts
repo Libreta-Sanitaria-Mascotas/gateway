@@ -11,14 +11,14 @@ type UploadedFilePayload = {
   size: number;
 };
 
-interface CreateHealthWithCertificateData {
+interface CreateHealthWithAttachmentsData {
   healthData: any;
-  certificate?: UploadedFilePayload;
+  attachments?: UploadedFilePayload[];
 }
 
 @Injectable()
-export class CreateHealthWithCertificateSaga
-  implements ISaga<CreateHealthWithCertificateData, any>
+export class CreateHealthWithAttachmentsSaga
+  implements ISaga<CreateHealthWithAttachmentsData, any>
 {
   private executedSteps: SagaStep[] = [];
 
@@ -37,9 +37,9 @@ export class CreateHealthWithCertificateSaga
     );
   }
 
-  async execute(data: CreateHealthWithCertificateData) {
+  async execute(data: CreateHealthWithAttachmentsData) {
     let healthRecord: any = null;
-    let certificate: any = null;
+    const uploadedAttachments: any[] = [];
 
     try {
       const createHealthStep: SagaStep = {
@@ -65,44 +65,51 @@ export class CreateHealthWithCertificateSaga
       healthRecord = await createHealthStep.execute();
       this.executedSteps.push(createHealthStep);
 
-      if (data.certificate) {
-        const certificateFile = data.certificate;
-          const uploadCertificateStep: SagaStep = {
-            name: 'upload_certificate',
-            execute: async () => {
-            certificate = await this.mediaHttpService.uploadFile(
-              certificateFile,
-              'health',
-              healthRecord.id,
-            );
-            await this.sendWithResilience(
-              this.healthService.send(
-                { cmd: 'link_media' },
-                { healthRecordId: healthRecord.id, mediaId: certificate.id },
-              ),
-            );
-            return certificate;
-          },
-          compensate: async () => {
-            if (certificate?.id) {
-              await lastValueFrom(
-                this.mediaService.send({ cmd: 'delete_file' }, { id: certificate.id }),
+      if (data.attachments?.length) {
+        const uploadAttachmentsStep: SagaStep = {
+          name: 'upload_attachments',
+          execute: async () => {
+            for (const attachment of data.attachments ?? []) {
+              const media = await this.mediaHttpService.uploadFile(
+                attachment,
+                'health',
+                healthRecord.id,
               );
-              await lastValueFrom(
+              uploadedAttachments.push(media);
+              await this.sendWithResilience(
                 this.healthService.send(
-                  { cmd: 'unlink_media' },
-                  { healthRecordId: healthRecord.id, mediaId: certificate.id },
+                  { cmd: 'link_media' },
+                  { healthRecordId: healthRecord.id, mediaId: media.id },
                 ),
               );
+              healthRecord.mediaIds = [...(healthRecord?.mediaIds ?? []), media.id];
+            }
+            return uploadedAttachments;
+          },
+          compensate: async () => {
+            for (const media of uploadedAttachments) {
+              try {
+                await lastValueFrom(
+                  this.mediaService.send({ cmd: 'delete_file' }, { id: media.id }),
+                );
+                await lastValueFrom(
+                  this.healthService.send(
+                    { cmd: 'unlink_media' },
+                    { healthRecordId: healthRecord.id, mediaId: media.id },
+                  ),
+                );
+              } catch (err) {
+                // best-effort compensation; log could be added here
+              }
             }
           },
         };
 
-        certificate = await uploadCertificateStep.execute();
-        this.executedSteps.push(uploadCertificateStep);
+        this.executedSteps.push(uploadAttachmentsStep);
+        await uploadAttachmentsStep.execute();
       }
 
-      return { healthRecord, certificate };
+      return { healthRecord, attachments: uploadedAttachments };
     } catch (error) {
       await this.compensate();
       throw error;
